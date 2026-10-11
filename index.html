@@ -71,7 +71,7 @@
   .ctrl-btn:disabled{opacity:.4;cursor:not-allowed;}
   .btn-check{background:var(--a);}
   .btn-slow{background:#9333ea;}
-  .btn-next{background:var(--b);}
+  .btn-next{background:#059669;}
 
   .diff-view{display:none;flex-direction:column;gap:8px;}
   .diff-view.show{display:flex;}
@@ -104,7 +104,7 @@
     </div>
   </header>
 
-  <!-- 狀態顯示列：清楚掌握音訊與語音狀態 -->
+  <!-- 狀態顯示列 -->
   <div class="status">
     <span class="dot"></span>
     <span id="statusText">請先點擊畫面任意處解鎖聲音；需使用 HTTPS / localhost 才能開啟麥克風。</span>
@@ -115,7 +115,7 @@
     <textarea id="scriptA" placeholder="A 台詞，一行一句"></textarea>
     <textarea id="scriptB" style="margin-top:6px;" placeholder="B 標準答案，一行一句，與 A 依序對應"></textarea>
     <div class="hint">點「更新劇本」後重新載入第一組，內容會自動記住。</div>
-    <button class="mini-btn" onclick="loadScript()">更新劇本</button>
+    <button class="mini-btn" onclick="loadScript(false)">更新劇本</button>
   </details>
 
   <div class="card s-a">
@@ -229,29 +229,42 @@ I am not sure if I have time.`;
     statusText.textContent = '已用 0.4 倍慢速播放正確句。';
   }
 
-  // 載入劇本
-  function loadScript(){
-    const saved = localStorage.getItem('ws_script');
-    if (saved){
-      try {
-        const o = JSON.parse(saved);
-        scriptA.value = o.A || defaultA; 
-        scriptB.value = o.B || defaultB;
-      } catch(e) {
-        scriptA.value = defaultA; scriptB.value = defaultB;
+  // 載入與更新劇本
+  function loadScript(isInit = false){
+    let rawA = defaultA;
+    let rawB = defaultB;
+
+    if (isInit) {
+      // 網頁剛打開的初始化：從 localStorage 讀取
+      const saved = localStorage.getItem('ws_script');
+      if (saved){
+        try {
+          const o = JSON.parse(saved);
+          rawA = o.A || defaultA;
+          rawB = o.B || defaultB;
+        } catch(e) {}
       }
+      scriptA.value = rawA;
+      scriptB.value = rawB;
     } else {
-      scriptA.value = defaultA; scriptB.value = defaultB;
+      // 用戶手動點擊「更新劇本」：抓取輸入框當下的內容並存入 localStorage
+      rawA = scriptA.value;
+      rawB = scriptB.value;
+      localStorage.setItem('ws_script', JSON.stringify({ A: rawA, B: rawB }));
     }
+
     pairs.length = 0;
-    const arrA = scriptA.value.split('\n').map(s=>s.trim()).filter(Boolean);
-    const arrB = scriptB.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const arrA = rawA.split('\n').map(s=>s.trim()).filter(Boolean);
+    const arrB = rawB.split('\n').map(s=>s.trim()).filter(Boolean);
     for (let i = 0; i < arrA.length; i++) {
       pairs.push({ A: arrA[i], B: arrB[i] || '' });
     }
-    localStorage.setItem('ws_script', JSON.stringify({A: scriptA.value, B: scriptB.value}));
+
     currentIdx = 0;
     renderRound();
+    if (!isInit) {
+      statusText.textContent = '劇本已更新成功，已從第一組對話開始！';
+    }
   }
 
   // 畫面渲染
@@ -377,7 +390,7 @@ I am not sure if I have time.`;
   userInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); doCheck(); } });
 
   // 初始化執行
-  loadScript();
+  loadScript(true);
   initRecognition();
 </script>
 </body>
