@@ -30,7 +30,7 @@
 
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
 
-  /* 狀態顯示列（確保能清楚看到目前音訊與語音狀態） */
+  /* 狀態顯示列 */
   .status{display:flex;gap:8px;align-items:flex-start;font-size:.85rem;padding:10px 12px;border-radius:10px;background:#e2e8f0;line-height:1.5;}
   .status .dot{width:8px;height:8px;border-radius:50%;background:#2563eb;flex:none;margin-top:5px;}
 
@@ -235,7 +235,6 @@ I am not sure if I have time.`;
     let rawB = defaultB;
 
     if (isInit) {
-      // 網頁剛打開的初始化：從 localStorage 讀取
       const saved = localStorage.getItem('ws_script');
       if (saved){
         try {
@@ -247,7 +246,6 @@ I am not sure if I have time.`;
       scriptA.value = rawA;
       scriptB.value = rawB;
     } else {
-      // 用戶手動點擊「更新劇本」：抓取輸入框當下的內容並存入 localStorage
       rawA = scriptA.value;
       rawB = scriptB.value;
       localStorage.setItem('ws_script', JSON.stringify({ A: rawA, B: rawB }));
@@ -283,43 +281,53 @@ I am not sure if I have time.`;
     if (audioUnlocked && p.A) speak(p.A, 0.8);
   }
 
-  // 比對邏輯
-  function clean(s){ return s.toLowerCase().replace(/[^a-z0-9'\s]/g,' ').replace(/\s+/g,' ').trim(); }
-  function lcsSeq(a,b){
-    const m=a.length,n=b.length;
-    const dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
-    for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)
-      dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]+1:Math.max(dp[i-1][j],dp[i][j-1]);
-    let i=m,j=n,seq='';
-    while(i>0&&j>0){
-      if(a[i-1]===b[j-1]){seq=a[i-1]+seq;i--;j--;}
-      else if(dp[i-1][j]>dp[i][j-1])i--;else j--;
-    }
-    return seq;
-  }
-  function mark(src,common){
-    let ci=0,out='';
-    for(const ch of src){
-      if(ci<common.length&&ch===common[ci]){out+=ch;ci++;}
-      else out+=`<span class="diff-red">${ch}</span>`;
-    }
-    return out;
-  }
-
+  // 糾錯邏輯：改為單字級比對 (Word-level Diff)
   function doCheck(){
     const raw = userInput.value.trim();
     if(!raw){ statusText.textContent = '請先說話或輸入文字，再按檢查。'; return; }
-    const c = clean(getCurrent().B), u = clean(raw);
-    const ok = (u === c);
-    const common = lcsSeq(c,u);
-    diffCorrect.innerHTML = `<span class="d-label good">正確：</span>${mark(c,common)}`;
-    diffUser.innerHTML = `<span class="d-label bad">你的：</span>${mark(u,common)}`;
+    
+    const cleanStr = (s) => s.toLowerCase().replace(/[^a-z0-9'\s]/g,' ').replace(/\s+/g,' ').trim();
+    
+    const correctRaw = getCurrent().B;
+    const userRaw = raw;
+
+    const cWords = cleanStr(correctRaw).split(' ');
+    const uWords = cleanStr(userRaw).split(' ');
+
+    const ok = (cWords.join(' ') === uWords.join(' '));
+
+    let correctHtml = '<span class="d-label good">正確：</span>';
+    let userHtml = '<span class="d-label bad">你的：</span>';
+
+    const maxLen = Math.max(cWords.length, uWords.length);
+    let cArr = [];
+    let uArr = [];
+
+    for (let i = 0; i < maxLen; i++) {
+      let cw = cWords[i] || '';
+      let uw = uWords[i] || '';
+
+      if (cw === uw) {
+        cArr.push(cw);
+        uArr.push(uw);
+      } else {
+        if (cw) cArr.push(`<span class="diff-red">${cw}</span>`);
+        if (uw) uArr.push(`<span class="diff-red">${uw}</span>`);
+      }
+    }
+
+    correctHtml += cArr.join(' ');
+    userHtml += uArr.join(' ');
+
+    diffCorrect.innerHTML = correctHtml;
+    diffUser.innerHTML = userHtml;
     diffView.className = 'diff-view show';
+
     if(ok){
       statusText.textContent = '句子比對正確！可前往下一組。';
       nextBtn.disabled = false; slowBtn.disabled = true;
     }else{
-      statusText.textContent = '有差異（粗體紅字＝漏掉或打錯），已慢速播放正確句。';
+      statusText.textContent = '有單字或拼寫差異（紅字部分），已慢速播放正確句。';
       speak(getCurrent().B, 0.4);
       slowBtn.disabled = false; nextBtn.disabled = true;
     }
