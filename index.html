@@ -111,7 +111,7 @@
     </div>
     <div>
       <h1>英文對話練習・口說陪練</h1>
-      <p>特定名字智慧識別與發音自動修正版</p>
+      <p>精準名字修復版（修正 to you -> qiyu）</p>
     </div>
   </header>
   <div class="status">
@@ -171,53 +171,33 @@
   </div>
 </div>
 <script>
-  // 三個專屬特定名字列表
-  const TARGET_NAMES = ['qiyu', 'shen xinghui', 'qin che'];
-
-  // 1. 強效文字替換（先做一輪常見的語音誤判詞替換）
-  function quickReplaceNameInText(text) {
-    if(!text) return text;
-    let t = text;
-    // qiyu 常被聽成的組合
-    t = t.replace(/\b(keyu|key\s*you|can\s*you|do\s*you|kill\0you|ki\s*yu|qiu|clear|kio|祁煜|奇煜)\b/gi, 'qiyu');
-    // shen xinghui 常被聽成的組合
-    t = t.replace(/\b(shen\s*xing\s*hui|shen\s*xing\s*way|shen\s*shin\s*hui|shen\s*seeing\s*way|沈星回)\b/gi, 'shen xinghui');
-    // qin che 常被聽成的組合
-    t = t.replace(/\b(qin\s*che|chin\s*che|qin\s*chair|chin\s*chair|can\s*check|秦徹|秦澈)\b/gi, 'qin che');
-    return t;
-  }
-
-  // 2. 劇本關注法：比對當前 B 句是否有目標名字，若有則強制模糊修正辨識結果
-  function smartCorrectUserText(userRaw, targetB) {
-    let text = quickReplaceNameInText(userRaw);
+  // 強效專用校正函式
+  function processNameCorrections(userRaw, targetB) {
+    if (!userRaw) return userRaw;
+    let t = userRaw;
     const targetB_lower = targetB.toLowerCase();
 
-    TARGET_NAMES.forEach(name => {
-      if (targetB_lower.includes(name)) {
-        // 如果劇本 B 有這個名字，但使用者辨識出來的結果裡面沒有
-        if (!text.toLowerCase().includes(name)) {
-          const uWords = text.split(/\s+/);
-          const bWords = targetB.split(/\s+/);
-          
-          // 找出 name 在 B 句中的位置
-          const nameWords = name.split(' ');
-          const nameLen = nameWords.length;
-          
-          // 如果字數相近，直接在相同索引位置進行強制置換
-          for (let i = 0; i <= uWords.length - nameLen; i++) {
-            const segment = uWords.slice(i, i + nameLen).join(' ').toLowerCase();
-            // 只要長度接近，或是發音字首相同、或是常見的誤判單字，直接強制修復為 name
-            if (segment.length >= 2 && segment.length <= name.length + 5) {
-              uWords.splice(i, nameLen, name);
-              text = uWords.join(' ');
-              break;
-            }
-          }
-        }
+    // 1. 如果標準答案有 qiyu
+    if (targetB_lower.includes('qiyu')) {
+      // 針對最常見的極度誤判字組合（包含 to you, do you, kill you, key you, see you, clear 等）進行直接替換
+      t = t.replace(/\b(to\s*you|do\s*you|kill\s*you|key\s*you|see\s*you|can\s*you|give\s*you|kio|keyu|kiyu|qiu|clear|kiel|ke\s*yu)\b/gi, 'qiyu');
+      // 如果經過第一階段替換後依然沒有 qiyu，但句子最後或最前出現單字 you
+      if (!t.toLowerCase().includes('qiyu') && /\byou\b/i.test(t)) {
+        t = t.replace(/\b(to|do|kill|key|see|can|give)?\s*you\b/gi, 'qiyu');
       }
-    });
+    }
 
-    return text;
+    // 2. 如果標準答案有 shen xinghui
+    if (targetB_lower.includes('shen xinghui')) {
+      t = t.replace(/\b(shen\s*xing\s*hui|shen\s*xing\s*way|shen\s*shin\s*hui|shen\s*seeing\s*way|shen\s*sing\s*way|sing\s*way)\b/gi, 'shen xinghui');
+    }
+
+    // 3. 如果標準答案有 qin che
+    if (targetB_lower.includes('qin che')) {
+      t = t.replace(/\b(qin\s*che|chin\s*che|qin\s*chair|chin\s*chair|can\s*check|kin\s*check|pin\s*chair)\b/gi, 'qin che');
+    }
+
+    return t;
   }
 
   const defaultA = `What did you do yesterday?
@@ -385,7 +365,7 @@ I am not sure if I have time.`;
 
   function doCheck(){
     const currentB = getCurrent().B;
-    const raw = smartCorrectUserText(userInput.value.trim(), currentB);
+    const raw = processNameCorrections(userInput.value.trim(), currentB);
     if(!raw){ statusText.textContent = '請先說話或輸入文字，再按檢查。'; return; }
     
     const cleanStr = (s) => s.toLowerCase().replace(/[^a-z0-9'\s]/g,' ').replace(/\s+/g,' ').trim();
@@ -472,15 +452,14 @@ I am not sure if I have time.`;
       for (let i = ev.resultIndex; i < ev.results.length; i++)
         text += ev.results[i][0].transcript;
       
-      // 使用「當前 B 劇本關注法」進行動態修正
       const currentB = getCurrent().B;
-      const fixedText = smartCorrectUserText(text, currentB);
+      const fixedText = processNameCorrections(text, currentB);
 
       heardText.textContent = fixedText;
       heardText.className = 'heard-text';
       userInput.value = fixedText;
       micState.textContent = '辨識完成';
-      statusText.textContent = '語音辨識完畢（已自動配對並修復名字），可以點擊「檢查句子」或按 Enter。';
+      statusText.textContent = '語音辨識完畢（已校正名字發音），可以點擊「檢查句子」或按 Enter。';
     };
     recognition.onerror = (ev) => {
       recLabel.textContent = '開始說話';
